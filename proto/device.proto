@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package device;
+
+message DeviceCommand {
+    int64 cmi = 1;
+    int64 vrs = 2;
+    string cmd = 3;
+    int32 val =4;
+}

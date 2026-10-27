@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package device;
+
+message DeviceAck{
+
+    int64 cmi = 1;
+    int64 vrs = 2;
+
+    string cmd = 3;
+    bool sts = 4;
+    int32 val=5;
+}

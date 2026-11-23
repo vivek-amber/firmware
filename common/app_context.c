@@ -1,4 +1,9 @@
-
+/*
+ * @@file:
+ * @@brief:
+ * @@author: Vivek
+ * @@date:
+ */
 
 #include "app_context.h"
 #include "esp_mac.h"
@@ -10,7 +15,6 @@ static char deviceId[18];
 /* Private functions */
 static const char *getDeviceId(void);
 
-
 static app_context_t g_app_ctx = {
     .app_state = APP_STATE_INIT,
     .ble = {
@@ -18,6 +22,7 @@ static app_context_t g_app_ctx = {
         .advertising = false,
     },
     .wifi = {.connected = false, .state = WIFI_STATE_UNINITIALIZED},
+    .security = {.claim_verified = false, .nonce_received= false},
 };
 
 esp_err_t xAppContextInit(void)

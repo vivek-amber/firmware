@@ -23,15 +23,19 @@ static void vMqttConnectionHandler(esp_mqtt_event_id_t event_id, esp_mqtt_event_
 esp_err_t xMqttManagerInit(void)
 {
 
-    app_context_t *ctx = xAppContextGet();
+    // Protection
+    if (mqtt_client != NULL)
+    {
+        return ESP_OK;
+    }
 
-    size_t topic_size;
+    app_context_t *ctx = xAppContextGet();
     char statusTopic[128];
 
-    ESP_ERROR_CHECK(xMqttBuildStatusTopic(statusTopic,sizeof(statusTopic)));
+    ESP_ERROR_CHECK(xMqttBuildStatusTopic(statusTopic, sizeof(statusTopic)));
 
     static uint8_t lwtBuffer[32];
-    size_t lwtLen = xMqttBuildStatusPayload(false,lwtBuffer,sizeof(lwtBuffer));
+    size_t lwtLen = xMqttBuildStatusPayload(false, lwtBuffer, sizeof(lwtBuffer));
 
     /* Configure and Init MQTT Client */
     const esp_mqtt_client_config_t mqtt_cfg = {
@@ -41,7 +45,7 @@ esp_err_t xMqttManagerInit(void)
                 .port = 8883},
             .verification = {.crt_bundle_attach = esp_crt_bundle_attach}},
         .credentials = {.username = MQTT_USERNAME, .authentication = {.password = MQTT_PASSWORD}, .client_id = ctx->deviceId},
-        .session = {.keepalive = 5, .last_will = {.topic = statusTopic, .msg = (const char *)lwtBuffer, .msg_len = lwtLen, .qos = 1, .retain = 1}}};
+        .session = {.keepalive = 10, .last_will = {.topic = statusTopic, .msg = (const char *)lwtBuffer, .msg_len = lwtLen, .qos = 1, .retain = 1}}};
     mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
 
     if (mqtt_client == NULL)
@@ -69,14 +73,20 @@ static void vMqttEventHandler(
 
     /* Type casted for better types */
     esp_mqtt_event_handle_t event = event_data;
-    esp_mqtt_client_handle_t client = event->client;
     esp_mqtt_event_id_t event_id = e_id;
+
+    /* Local vriables */
+    app_context_t *ctx = xAppContextGet();
 
     switch (event_id)
     {
 
     case MQTT_EVENT_CONNECTED:
+        ctx->mqtt.connected = true;
+        vMqttConnectionHandler(event_id, event);
+        break;
     case MQTT_EVENT_DISCONNECTED:
+        ctx->mqtt.connected = false;
         vMqttConnectionHandler(event_id, event);
         break;
     case MQTT_EVENT_DATA:
@@ -111,6 +121,31 @@ static void vMqttConnectionHandler(esp_mqtt_event_id_t event_id, esp_mqtt_event_
     }
 }
 
+esp_err_t xMqttManagerStop(void)
+{
+
+    // 1. Stop the heartbeat timer FIRST so it stops trying to publish
+    vMqttStopHeartbeatTimer();
+
+    if (mqtt_client == NULL)
+    {
+        return ESP_OK;
+    }
+
+    // Stop the client transport loop and disconnect cleanly
+    esp_mqtt_client_stop(mqtt_client);
+    
+    // Destroy the client instance to release TLS sockets and memory
+    esp_mqtt_client_destroy(mqtt_client);
+    mqtt_client = NULL;
+
+    app_context_t *ctx = xAppContextGet();
+    ctx->mqtt.connected = false;
+    ctx->mqtt.initialized = false;
+
+    ESP_LOGI(TAG, "MQTT manager stopped and destroyed");
+    return ESP_OK;
+}
 bool bMqttmanagerSendData(const char *topic, const uint8_t *buff, const uint32_t len)
 {
 
@@ -176,7 +211,6 @@ esp_err_t xMqttManagerStatusTopic(char *topic, size_t topic_size)
 
     return ESP_OK;
 }
-
 esp_err_t xMqttManagerStateTopic(char *topic, size_t topic_size)
 {
 
@@ -188,6 +222,29 @@ esp_err_t xMqttManagerStateTopic(char *topic, size_t topic_size)
         topic,
         topic_size,
         "company/%s/device/%s/state",
+        COMPANY_ID,
+        ctx->deviceId);
+
+    if (topicLength < 0 ||
+        (size_t)topicLength >= topic_size)
+    {
+        ESP_LOGE(TAG, "State topic is too long");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return ESP_OK;
+}
+esp_err_t xMqttManagerErrorTopic(char *topic, size_t topic_size)
+{
+
+    /* Local variables */
+    app_context_t *ctx = xAppContextGet();
+
+    /* Topic creation */
+    int topicLength = snprintf(
+        topic,
+        topic_size,
+        "company/%s/device/%s/error",
         COMPANY_ID,
         ctx->deviceId);
 

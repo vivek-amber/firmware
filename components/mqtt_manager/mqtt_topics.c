@@ -77,7 +77,7 @@ esp_err_t xMqttBuildStatusTopic(char *topic, size_t topicSize)
     return ESP_OK;
 }
 
-size_t xMqttBuildStatusPayload(bool online,uint8_t *buffer,size_t bufferSize)
+size_t xMqttBuildStatusPayload(bool online, uint8_t *buffer, size_t bufferSize)
 {
     device_DeviceStatus status = {
         .online = online};
@@ -100,27 +100,36 @@ size_t xMqttBuildStatusPayload(bool online,uint8_t *buffer,size_t bufferSize)
     return stream.bytes_written;
 }
 
+void vMqttStopHeartbeatTimer(void)
+{
+    if (heartBeatTimer != NULL)
+    {
+        xTimerStop(heartBeatTimer, 0);
+        xTimerDelete(heartBeatTimer, 0);
+        heartBeatTimer = NULL;
+    }
+    mqttClient = NULL;
+    ESP_LOGI(TAG, "Heartbeat timer stopped and deleted");
+}
+
 static void vMqttPublishHeartBeat(TimerHandle_t timer)
 {
-    if (mqttClient == NULL)
+    app_context_t *ctx = xAppContextGet();
+
+    // Guard: Prevent publishing if MQTT is disconnected or uninitialized
+    if (mqttClient == NULL || !ctx->mqtt.connected || !ctx->mqtt.initialized)
     {
         return;
     }
 
     char topic[128];
-
-    ESP_ERROR_CHECK(
-        xMqttBuildStatusTopic(
-            topic,
-            sizeof(topic)));
+    if (xMqttBuildStatusTopic(topic, sizeof(topic)) != ESP_OK)
+    {
+        return;
+    }
 
     uint8_t buffer[32];
-
-    size_t payloadLen =
-        xMqttBuildStatusPayload(
-            true,
-            buffer,
-            sizeof(buffer));
+    size_t payloadLen = xMqttBuildStatusPayload(true, buffer, sizeof(buffer));
 
     if (payloadLen == 0)
     {
@@ -128,16 +137,16 @@ static void vMqttPublishHeartBeat(TimerHandle_t timer)
         return;
     }
 
-    int messageId =
-        esp_mqtt_client_publish(
-            mqttClient,
-            topic,
-            (const char *)buffer,
-            payloadLen,
-            1,
-            0);
+    int messageId = esp_mqtt_client_publish(
+        mqttClient,
+        topic,
+        (const char *)buffer,
+        payloadLen,
+        1,
+        0);
 
-    ESP_LOGI(TAG,
-             "Heartbeat sent msgId=%d",
-             messageId);
+    if (messageId < 0)
+    {
+        ESP_LOGE(TAG, "Heartbeat error msgId=%d", messageId);
+    }
 }

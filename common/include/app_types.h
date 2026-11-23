@@ -19,6 +19,8 @@ typedef enum
 {
     APP_EVENT_NONE = 0,
 
+    APP_EVENT_AC_TIMEOUT_CHECK,
+    
     APP_EVENT_WIFI_PROVISIONING_START,
     APP_EVENT_WIFI_PROVISIONING_COMPLETE,
     APP_EVENT_WIFI_CONNECTION_FAILED,
@@ -59,6 +61,18 @@ typedef struct
     uint16_t conn_handle;
 
 } ble_context_t;
+
+typedef struct
+{
+    bool initialized;
+    bool connected;
+} mqtt_ctx_t;
+
+typedef struct{
+    bool nonce_received;
+    bool claim_verified;
+} security_ctxt_t;
+
 
 /* Wifi Types */
 typedef enum

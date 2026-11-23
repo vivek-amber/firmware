@@ -1,3 +1,16 @@
+/*
+ * @@file:
+ * @@brief:
+ * @@author: Vivek
+ * @@date:
+ */
+
+/*
+ * @@file:
+ * @@brief:
+ * @@author: Vivek
+ * @@date:
+ */
 
 #include "ble_manager.h"
 #include "ble_gatt.h"
@@ -14,8 +27,9 @@ static void nimble_host_task(void *param);
 /* Private variables */
 static const char *TAG = "BLE_MANAGER";
 
-static void nimble_host_task(void *param){
-    
+static void nimble_host_task(void *param)
+{
+
     /* Task entry log */
     ESP_LOGI(TAG, "nimble host task has been started!");
 
@@ -26,7 +40,8 @@ static void nimble_host_task(void *param){
     nimble_port_freertos_deinit();
 }
 
-esp_err_t xBleManagerInit( void ){
+esp_err_t xBleManagerInit(void)
+{
 
     /* Local variable */
     esp_err_t err;
@@ -34,7 +49,8 @@ esp_err_t xBleManagerInit( void ){
 
     /* NimBLE stack initialization */
     err = nimble_port_init();
-    if(err != ESP_OK){
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "failed to initialize nimble stack");
         return err;
     }
@@ -42,14 +58,18 @@ esp_err_t xBleManagerInit( void ){
     ble_hs_cfg.sync_cb = ble_on_sync;
 
     /* Security */
-    ble_hs_cfg.sm_bonding = 1;
+    ble_hs_cfg.sm_bonding = 0;
     ble_hs_cfg.sm_sc = 1;
     ble_hs_cfg.sm_mitm = 0;
     ble_hs_cfg.sm_io_cap = BLE_HS_IO_NO_INPUT_OUTPUT;
 
+    ble_hs_cfg.sm_our_key_dist = 0;
+    ble_hs_cfg.sm_their_key_dist = 0;
+
     /* GAP service initialization */
     err = xGapInit();
-    if(err != ESP_OK){
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "failed to initialize GAP service");
         nimble_port_deinit();
         return err;
@@ -57,7 +77,8 @@ esp_err_t xBleManagerInit( void ){
 
     /* GATT server initialization */
     err = xGattInit();
-    if(err != ESP_OK){
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "failed to initialize GATT service");
         nimble_port_deinit();
         return err;
@@ -70,11 +91,13 @@ esp_err_t xBleManagerInit( void ){
     return ESP_OK;
 }
 
-esp_err_t xBleManagerStartAdvertising( void ){
+esp_err_t xBleManagerStartAdvertising(void)
+{
 
     return xGapAdvertiseStart();
 }
 
-esp_err_t xBleManagerStopAdvertising( void ){
+esp_err_t xBleManagerStopAdvertising(void)
+{
     return xGapAdvertiseStop();
 }

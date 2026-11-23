@@ -7,4 +7,5 @@ idf_component_register(SRCS
                         bt 
                         common
                         queue_manager
+                        security_manager
                     )

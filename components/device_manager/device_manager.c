@@ -13,8 +13,7 @@
 #include "ac_device.h"
 #include "storage.h"
 #include "led_manager.h"
-
-
+#include "security_manager.h"
 
 /* Private variables*/
 static const char *TAG = "DEVICE_MANAGER";
@@ -28,13 +27,13 @@ void vDeviceManagerInit(void)
     /* Init managers */
     xQueueManagerInit();
     xStorageInit();
+    xSecurityManagerInit();
+    xAppContextInit();
     xBleManagerInit();
     xWifiManagerInit();
     xUartManagerInit();
-    xMqttManagerInit();
+    vDeviceInit();
     xLedManagerInit();
-
-    ESP_ERROR_CHECK(xBleManagerStartAdvertising());
 
     /* Create device orchestration task */
     xTaskCreate(vDeviceTask, "device_task", 4096, NULL, 5, NULL);
@@ -73,27 +72,36 @@ static void vDeviceTask(void *arg)
                 if (xMqttReceive(&msg, portMAX_DELAY) == ESP_OK)
                 {
                     vAcDeviceProcessCloudCommand(&msg);
-
                 }
                 break;
             }
-            
+
             case APP_EVENT_WIFI_PROVISIONING_START:
+                // 1. Start Advertisement
                 xBleManagerStartAdvertising();
                 break;
 
             case APP_EVENT_WIFI_PROVISIONING_COMPLETE:
 
-                // Notify's app
-                vBleNotifyWifiStatus(ctx->ble.conn_handle,WIFI_STATUS_CONNECTING);
+                // 1. Stop MQTT client if it was already initialized 
+                if (ctx->mqtt.initialized)
+                {
+                    xMqttManagerStop(); // MQTT stop function 
+                    ctx->mqtt.initialized = false;
+                }
 
+                // Notify's app
+                vBleNotifyWifiStatus(ctx->ble.conn_handle, WIFI_STATUS_CONNECTING);
+                xBleManagerStopAdvertising();
                 xWifiManagerReset();
                 break;
 
             case APP_EVENT_WIFI_CONNECTED:
 
+                ESP_LOGI(TAG, "wifi connected");
+
                 // Notify's app
-                vBleNotifyWifiStatus(ctx->ble.conn_handle,WIFI_STATUS_CONNECTED);
+                vBleNotifyWifiStatus(ctx->ble.conn_handle, WIFI_STATUS_CONNECTED);
 
                 if (ctx->wifi.credentials.pending_save)
                 {
@@ -105,20 +113,27 @@ static void vDeviceTask(void *arg)
                     }
                 }
 
-                ESP_LOGI(TAG, "wifi connected");
-                xBleManagerStopAdvertising();
+                if (!ctx->mqtt.initialized)
+                {
+                    if (xMqttManagerInit() == ESP_OK)
+                    {
+                        ctx->mqtt.initialized = true;
+                    }
+                    else
+                    {
+                        ESP_LOGE(TAG, "MQTT init failed");
+                    }
+                }
                 break;
 
             case APP_EVENT_WIFI_CONNECTION_FAILED:
-                        
+
                 // Notify's app
                 if (ctx->wifi.credentials.pending_save)
                 {
-                    vBleNotifyWifiStatus(ctx->ble.conn_handle,WIFI_STATUS_FAILED);
+                    vBleNotifyWifiStatus(ctx->ble.conn_handle, WIFI_STATUS_FAILED);
                     ctx->wifi.credentials.pending_save = false;
                 }
-                ESP_LOGI(TAG, "wifi disconnected, reconnecting");
-                xWifiManagerConnect();
                 break;
 
             default:

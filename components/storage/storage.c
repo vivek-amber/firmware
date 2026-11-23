@@ -55,9 +55,15 @@ esp_err_t xStorageSet(const char *key, const char *value)
 
 esp_err_t xStorageGet(const char *key, char *buffer, size_t len)
 {
-
     nvs_handle_t nvsHandler;
     esp_err_t err;
+
+    if (buffer == NULL || len == 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(buffer, 0, len);
 
     err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvsHandler);
     if (err != ESP_OK)
@@ -65,7 +71,22 @@ esp_err_t xStorageGet(const char *key, char *buffer, size_t len)
         return err;
     }
 
-    size_t required_len = len;
+    size_t required_len = 0;
+
+    err = nvs_get_str(nvsHandler,key,NULL,&required_len);
+
+    if (err != ESP_OK)
+    {
+        nvs_close(nvsHandler);
+        return err;
+    }
+
+    if (required_len > len)
+    {
+        nvs_close(nvsHandler);
+        memset(buffer, 0, len);
+        return ESP_ERR_NVS_INVALID_LENGTH;
+    }
 
     err = nvs_get_str(
         nvsHandler,
@@ -74,6 +95,11 @@ esp_err_t xStorageGet(const char *key, char *buffer, size_t len)
         &required_len);
 
     nvs_close(nvsHandler);
+
+    if (err != ESP_OK)
+    {
+        memset(buffer, 0, len);
+    }
 
     return err;
 }
@@ -156,7 +182,8 @@ esp_err_t xStorageSaveWifiCredentials(void)
     ctx->wifi.credentials.ssid_valid = false;
     ctx->wifi.credentials.pass_valid = false;
 
-    ESP_LOGI(TAG, "wifi credentials saved, SSID: %s", ctx->wifi.credentials.ssid);
+    memset(ctx->wifi.credentials.ssid,0,sizeof(ctx->wifi.credentials.ssid));
+    memset(ctx->wifi.credentials.pass,0,sizeof(ctx->wifi.credentials.pass));
 
     return ESP_OK;
 }
@@ -185,8 +212,6 @@ esp_err_t xStorageLoadWifiCredentials(void)
     {
         return err;
     }
-
-    ESP_LOGI(TAG, "wifi credentials loaded, SSID: %s", ctx->wifi.credentials.ssid);
 
     return ESP_OK;
 }

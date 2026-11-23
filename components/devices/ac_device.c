@@ -1,9 +1,9 @@
 
 #include "ac_device.h"
-#include <stdbool.h>
 #include "proto.h"
 #include "uart_manager.h"
 #include "mqtt_manager.h"
+#include "queue_manager.h"
 
 /* Private variables */
 static const char *TAG = "AC_DEVICE";
@@ -11,12 +11,14 @@ static uint8_t rx_buffer[512];
 static size_t rx_len = 0;
 static pending_command_t pendingCmd;
 #define PENDING_COMMAND_TIMEOUT_MS 2000U // 2sec
+static TimerHandle_t xAcDeviceTimer = NULL;
 #define COMPANY_ID "amber03AABCA3456E1Z9"
 
 /* Private functions declarations */
 static void vProcessUartData(void);
 static void vTelemetrySendToCloud(const uint8_t *frame, const uint8_t frame_len);
 static bool bTelemetrySendToDevice(const char *cmd, const uint32_t val);
+static void vHandleModuleConfig(const uint8_t *frame);
 
 /************************************************************************/
 /*                            Command from device                       */
@@ -75,7 +77,7 @@ static void vProcessUartData(void)
             rx_len--;
             continue;
         }
-        
+
         /* Full frame size */
         uint8_t frame_len = packet_len + 7;
 
@@ -88,7 +90,19 @@ static void vProcessUartData(void)
         /* Validate Check sum and send to telemetry */
         if (bIsValidCheckSum(rx_buffer, frame_len))
         {
-            vTelemetrySendToCloud(rx_buffer, frame_len);
+
+            uint16_t code = rx_buffer[2] << 8 | rx_buffer[3];
+
+            if (code == MODULE_CONFIG_CODE)
+            {
+
+                vHandleModuleConfig(rx_buffer);
+            }
+            else
+            {
+
+                vTelemetrySendToCloud(rx_buffer, frame_len);
+            }
         }
         else
         {
@@ -102,13 +116,12 @@ static void vProcessUartData(void)
     }
 }
 
-/* 3. Handles uart data from ProcessedUartData for sending to mqtt queue */
+/* 3.1 Handles uart data from ProcessedUartData for sending to mqtt queue */
 static void vTelemetrySendToCloud(const uint8_t *frame, const uint8_t frame_len)
 {
     /* Local Variable */
     uint8_t cmId = frame[6];
     const char *cmd = pcCommandToString(cmId);
-    app_context_t *ctx = xAppContextGet();
     char topic[128];
 
     if (cmd == NULL)
@@ -173,8 +186,43 @@ static void vTelemetrySendToCloud(const uint8_t *frame, const uint8_t frame_len)
         return;
     }
 
-    // 3. Will be treated as state now
+    // 3 Will be treated as state now
+    // 3.1 ERROR
+    if (strcmp(cmd, "eror") == 0)
+    {
+        if (xMqttManagerErrorTopic(topic, sizeof(topic)) != ESP_OK)
+        {
 
+            ESP_LOGE(TAG, "Error topic creation failed.");
+            return;
+        }
+
+        device_DeviceError eror = {
+            .value = value,
+        };
+
+        if (!pb_encode(&stream, device_DeviceError_fields, &eror))
+        {
+
+            ESP_LOGE(TAG, "Error encoding failed: %s", PB_GET_ERROR(&stream));
+            return;
+        }
+
+        if (bMqttmanagerSendData(topic, encodedBuff, stream.bytes_written))
+        {
+
+            ESP_LOGI(TAG, "Error sent cmd: %s , val: %d", cmd, value);
+        }
+        else
+        {
+            // TODO: HAndle Failure with retry
+            ESP_LOGE(TAG, "Error sending failure");
+        }
+
+        return;
+    }
+
+    // 3.2 OTHER
     if (xMqttManagerStateTopic(topic, sizeof(topic)) != ESP_OK)
     {
 
@@ -207,6 +255,17 @@ static void vTelemetrySendToCloud(const uint8_t *frame, const uint8_t frame_len)
     }
 }
 
+/* 3.2 Hamdle uart data from ProcessedUartData for configuring module */
+static void vHandleModuleConfig(const uint8_t *frame)
+{
+
+    uint8_t cmdId = frame[2];
+    if (cmdId == CMD_PROVISION)
+    {
+        xEventPost(APP_EVENT_WIFI_PROVISIONING_START);
+    }
+}
+
 /************************************************************************/
 /*                            Command from server                       */
 /***********************************************************************/
@@ -228,6 +287,13 @@ void vAcDeviceProcessCloudCommand(const mqtt_msg_t *msg)
             pdMS_TO_TICKS(PENDING_COMMAND_TIMEOUT_MS))
         {
 
+            char topic[128];
+            if (xMqttManagerAckTopic(topic, sizeof(topic)) != ESP_OK)
+            {
+
+                ESP_LOGE(TAG, "ACK topic creation failed.");
+                return;
+            }
             uint8_t encodedBuff[128] = {0};
             pb_ostream_t stream = pb_ostream_from_buffer(encodedBuff, sizeof(encodedBuff));
 
@@ -244,7 +310,7 @@ void vAcDeviceProcessCloudCommand(const mqtt_msg_t *msg)
                 ESP_LOGE(TAG, "ACK encoding failed");
             }
 
-            if (bMqttmanagerSendData("topic", encodedBuff, stream.bytes_written))
+            if (bMqttmanagerSendData(topic, encodedBuff, stream.bytes_written))
             {
 
                 ESP_LOGI(TAG, "ACK sent cmd: %s , val: %d", pendingCmd.cmd, pendingCmd.val);
@@ -323,16 +389,81 @@ static bool bTelemetrySendToDevice(const char *cmd, const uint32_t val)
     }
 
     /* Send to device */
-    if (bSendDataToDevice(packet.data, packet.len))
-    {
-        // TODO:
-        ESP_LOGI(TAG, "Tx done");
-        return true;
-    }
-    else
+    if (!bSendDataToDevice(packet.data, packet.len))
     {
         // TODO:
         ESP_LOGE(TAG, "Error while uart TX");
         return false;
+    }
+
+    return true;
+}
+
+/* 3. Periodic check for failed commands */
+void vHandleTimeoutAck(void)
+{
+    if (pendingCmd.busy &&
+        (xTaskGetTickCount() - pendingCmd.timestamp) >
+            pdMS_TO_TICKS(PENDING_COMMAND_TIMEOUT_MS))
+    {
+        // send failure ack
+        char topic[128];
+        if (xMqttManagerAckTopic(topic, sizeof(topic)) != ESP_OK)
+        {
+
+            ESP_LOGE(TAG, "ACK topic creation failed.");
+            return;
+        }
+        uint8_t encodedBuff[128] = {0};
+        pb_ostream_t stream = pb_ostream_from_buffer(encodedBuff, sizeof(encodedBuff));
+
+        device_DeviceAck ack = {
+            .cmi = pendingCmd.cmi,
+            .sts = false,
+            .val = pendingCmd.val,
+            .vrs = pendingCmd.vrs};
+        strncpy(ack.cmd, pendingCmd.cmd, sizeof(ack.cmd) - 1);
+        ack.cmd[sizeof(ack.cmd) - 1] = '\0';
+
+        if (!pb_encode(&stream, device_DeviceAck_fields, &ack))
+        {
+            ESP_LOGE(TAG, "ACK encoding failed");
+            return;
+        }
+
+        if (bMqttmanagerSendData(topic, encodedBuff, stream.bytes_written))
+        {
+
+            ESP_LOGI(TAG, "ACK sent cmd: %s , val: %d", pendingCmd.cmd, pendingCmd.val);
+        }
+        else
+        {
+            // TODO: HAndle Failure with retry
+            ESP_LOGE(TAG, "ACK sent sending failure");
+        }
+
+        // Clear pending state
+        memset(&pendingCmd, 0, sizeof(pendingCmd));
+    }
+}
+
+// Timer CallBack
+static void vAcDeviceTimerCb(TimerHandle_t xTimer)
+{
+    xEventPost(APP_EVENT_AC_TIMEOUT_CHECK);
+}
+
+void vDeviceInit(void)
+{
+    xAcDeviceTimer = xTimerCreate(
+        "ac_tmr",
+        pdMS_TO_TICKS(1000),
+        pdTRUE,
+        NULL,
+        vAcDeviceTimerCb);
+
+    if (xAcDeviceTimer != NULL)
+    {
+        xTimerStart(xAcDeviceTimer, 0);
     }
 }

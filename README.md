@@ -18,69 +18,6 @@ Firmware acts as the device-side component of the Amber IoT platform. It is resp
 - OTA-ready firmware architecture
 - Reliable recovery from connectivity failures
 
----
-
-## Current Status
-
-### Implemented
-
-✅ ESP32 firmware foundation
-
-✅ Wi-Fi provisioning and connectivity
-
-✅ MQTT communication layer
-
-✅ Command request handling
-
-✅ Device state synchronization
-
-✅ Real-time telemetry publishing
-
-✅ Device configuration management
-
-✅ NVS-based persistent storage
-
-✅ Error reporting framework
-
-✅ FreeRTOS task architecture
-
-✅ MQTT reconnect and recovery logic
-
-✅ Protobuf-based device messaging
-
----
-
-### In Progress
-
-🚧 OTA firmware updates
-
-🚧 Advanced device diagnostics
-
-🚧 Version management system
-
-🚧 Improved fault recovery workflows
-
-🚧 Event-driven state machine implementation
-
----
-
-### Planned
-
-📌 Secure firmware updates
-
-📌 Rollback support
-
-📌 Firmware progress reporting
-
-📌 Remote configuration updates
-
-📌 Edge analytics
-
-📌 Device activity logs
-
-📌 Fleet-wide update management
-
-📌 Enhanced security and certificate management
 
 ---
 
@@ -283,35 +220,6 @@ ESP32 Device
 
 ---
 
-## Future OTA Roadmap
-
-### Phase 1
-
-- Firmware version tracking
-- OTA partition configuration
-- Update availability checks
-
-### Phase 2
-
-- HTTPS firmware download
-- Image validation
-- OTA progress reporting
-
-### Phase 3
-
-- Rollback support
-- Failure recovery
-- Health verification
-
-### Phase 4
-
-- Fleet-wide deployments
-- Staged rollouts
-- Firmware analytics
-- Device targeting
-
----
-
 
 ## Repository Structure
 
@@ -323,12 +231,6 @@ firmware/
 ```
 
 ---
-
-## Author
-
-### Vivek
-
-Software Engineer focused on building end-to-end IoT platforms spanning embedded devices, backend microservices, and mobile applications.
 
 ### Core Areas
 

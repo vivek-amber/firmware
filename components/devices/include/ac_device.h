@@ -9,6 +9,7 @@
 
 /* Type defs */
 #define AC_DEVICE_HEADER 0xAA55
+#define MODULE_CONFIG_CODE 0x0305
 
 typedef enum
 {
@@ -69,6 +70,7 @@ typedef enum
     CMD_INVALID = 0x00,
     CMD_PWR = 0x01,
     CMD_TEMP = 0x02,
+    CMD_PROVISION = 0X03,
     CMD_MODE = 0x04,
     CMD_FAN_SPEED = 0x05,
     CMD_ECO = 0x08,
@@ -119,6 +121,9 @@ typedef struct
 
 void vAcDeviceProcessUartFrame(uart_msg_t *msg);
 void vAcDeviceProcessCloudCommand(const mqtt_msg_t *msg);
+
+void vDeviceInit(void);
+void vHandleTimeoutAck(void);
 
 /********************************** Helper Methods **************************************/
 

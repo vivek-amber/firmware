@@ -11,6 +11,7 @@
 /* private variables */
 static const char *TAG = "WIFI_MANAGER";
 static uint8_t s_wifi_retry_count = 0;
+static bool s_wifi_reconfigure_pending = false;
 #define WIFI_MAX_RETRIES 5
 
 /* Private function decl */
@@ -64,12 +65,12 @@ esp_err_t xWifimanagerStart(void)
 
     /* Load Credentials */
     esp_err_t err = xStorageLoadWifiCredentials();
-    
+
     if (err == ESP_OK)
     {
         ESP_LOGI(TAG, "wifi credentials found");
         /* Configure credentials*/
-        if (strlen(ctx->wifi.credentials.ssid) == 0 || strlen(ctx->wifi.credentials.pass) == 0)
+        if (strlen(ctx->wifi.credentials.ssid) == 0)
         {
             return ESP_ERR_INVALID_STATE;
         }
@@ -114,17 +115,65 @@ esp_err_t xWifiManagerConnect(void)
 esp_err_t xWifiManagerReset(void)
 {
     app_context_t *ctx = xAppContextGet();
-
     wifi_config_t wifi_cfg = {0};
 
     strncpy((char *)wifi_cfg.sta.ssid, ctx->wifi.credentials.ssid, sizeof(wifi_cfg.sta.ssid) - 1);
     strncpy((char *)wifi_cfg.sta.password, ctx->wifi.credentials.pass, sizeof(wifi_cfg.sta.password) - 1);
+    wifi_cfg.sta.ssid[sizeof(wifi_cfg.sta.ssid) - 1] = '\0';
+    wifi_cfg.sta.password[sizeof(wifi_cfg.sta.password) - 1] = '\0';
 
-    esp_wifi_disconnect();
+    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to set Wi-Fi config: %s", esp_err_to_name(err));
+        ctx->wifi.state = WIFI_STATE_DISCONNECTED;
+        return err;
+    }
 
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
+    s_wifi_retry_count = 0;
+    s_wifi_reconfigure_pending = false;
+    ctx->wifi.connected = false;
+    ctx->wifi.state = WIFI_STATE_CONNECTING;
 
-    return esp_wifi_connect();
+    err = esp_wifi_disconnect();
+
+    if (err == ESP_ERR_WIFI_NOT_STARTED)
+    {
+        ESP_LOGW(TAG, "Wi-Fi not started yet, starting now");
+        err = esp_wifi_start();
+        if (err != ESP_OK)
+        {
+            ctx->wifi.state = WIFI_STATE_DISCONNECTED;
+            ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(err));
+            return err;
+        }
+        return ESP_OK;
+    }
+
+    if (err == ESP_ERR_WIFI_NOT_CONNECT)
+    {
+        err = esp_wifi_connect();
+        if (err != ESP_OK)
+        {
+            ctx->wifi.state = WIFI_STATE_DISCONNECTED;
+            ESP_LOGE(TAG, "Wi-Fi connect failed after reconfiguration: %s", esp_err_to_name(err));
+            return err;
+        }
+        return ESP_OK;
+    }
+
+    if (err != ESP_OK)
+    {
+        ctx->wifi.state = WIFI_STATE_DISCONNECTED;
+        ESP_LOGE(TAG, "Wi-Fi disconnect failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    /* Connected before: wait for WIFI_EVENT_STA_DISCONNECTED to call esp_wifi_connect() */
+    s_wifi_reconfigure_pending = true;
+    ESP_LOGI(TAG, "Wi-Fi reconfiguration started");
+
+    return ESP_OK;
 }
 
 static void wifi_event_handler(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -142,6 +191,8 @@ static void wifi_event_handler(void *event_handler_arg, esp_event_base_t event_b
     {
 
         s_wifi_retry_count = 0;
+        s_wifi_reconfigure_pending = false;
+        
         ctx->wifi.connected = true;
         ctx->wifi.state = WIFI_STATE_CONNECTED;
 
@@ -150,20 +201,57 @@ static void wifi_event_handler(void *event_handler_arg, esp_event_base_t event_b
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
 
+        ctx->wifi.connected = false;
+
+        /*
+         * Expected disconnect caused by xWifiManagerReset()
+         */
+        if (s_wifi_reconfigure_pending)
+        {
+            s_wifi_reconfigure_pending = false;
+            s_wifi_retry_count = 0;
+
+            ctx->wifi.state = WIFI_STATE_CONNECTING;
+
+            esp_err_t err = esp_wifi_connect();
+
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG,"Wi-Fi reconfiguration connect failed: %s",esp_err_to_name(err));
+                ctx->wifi.state = WIFI_STATE_DISCONNECTED;
+                xEventPost(APP_EVENT_WIFI_CONNECTION_FAILED);
+            }
+
+            return;
+        }
+
+        /*
+         * Unexpected disconnect or failed connection attempt.
+         */
         if (s_wifi_retry_count < WIFI_MAX_RETRIES)
         {
             s_wifi_retry_count++;
-            esp_wifi_connect();
+
+            ctx->wifi.state = WIFI_STATE_CONNECTING;
+
+            ESP_LOGW(TAG,"Wi-Fi disconnected, retrying %u/%u",s_wifi_retry_count,WIFI_MAX_RETRIES);
+
+            esp_err_t err = esp_wifi_connect();
+
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG,"Wi-Fi retry start failed: %s",esp_err_to_name(err));
+            }
         }
-        else{
+        else
+        {
+            ESP_LOGE(TAG,"Wi-Fi connection failed after %u retries",WIFI_MAX_RETRIES);
 
             s_wifi_retry_count = 0;
-
             ctx->wifi.state = WIFI_STATE_DISCONNECTED;
             ctx->wifi.connected = false;
+
             xEventPost(APP_EVENT_WIFI_CONNECTION_FAILED);
-
         }
-
     }
 }

@@ -73,7 +73,7 @@ esp_err_t xStorageGet(const char *key, char *buffer, size_t len)
 
     size_t required_len = 0;
 
-    err = nvs_get_str(nvsHandler,key,NULL,&required_len);
+    err = nvs_get_str(nvsHandler, key, NULL, &required_len);
 
     if (err != ESP_OK)
     {
@@ -151,9 +151,9 @@ esp_err_t xStorageClearWifiCredentials(void)
     memset(ctx->wifi.credentials.pass, 0,
            sizeof(ctx->wifi.credentials.pass));
 
-    ctx->wifi.credentials.pending_save = false;
-    ctx->wifi.credentials.ssid_valid = false;
-    ctx->wifi.credentials.pass_valid = false;
+    ctx->wifi.credentials.cred_save_pending = false;
+    ctx->wifi.credentials.ssid_received = false;
+    ctx->wifi.credentials.pass_received = false;
 
     ESP_LOGI(TAG, "wifi credentials cleared");
 
@@ -178,12 +178,12 @@ esp_err_t xStorageSaveWifiCredentials(void)
         return err;
     }
 
-    ctx->wifi.credentials.pending_save = false;
-    ctx->wifi.credentials.ssid_valid = false;
-    ctx->wifi.credentials.pass_valid = false;
+    ctx->wifi.credentials.cred_save_pending = false;
+    ctx->wifi.credentials.ssid_received = false;
+    ctx->wifi.credentials.pass_received = false;
 
-    memset(ctx->wifi.credentials.ssid,0,sizeof(ctx->wifi.credentials.ssid));
-    memset(ctx->wifi.credentials.pass,0,sizeof(ctx->wifi.credentials.pass));
+    memset(ctx->wifi.credentials.ssid, 0, sizeof(ctx->wifi.credentials.ssid));
+    memset(ctx->wifi.credentials.pass, 0, sizeof(ctx->wifi.credentials.pass));
 
     return ESP_OK;
 }

@@ -3,15 +3,16 @@
 #include "mqtt_client.h"
 #include "esp_crt_bundle.h"
 #include "queue_manager.h"
-#include <stdbool.h>
 #include "mqtt_topics.h"
 
 /* Private variables */
 static const char *TAG = "MQTT_MANAGER";
-static const char *MQTT_URI = "mqtts://19b35c7aa9754ce0942e3dfd915f91b0.s1.eu.hivemq.cloud";
+static const char *MQTT_URI = "wss://ready-industrial-milan-days.trycloudflare.com/mqtt";
 static const char *MQTT_USERNAME = "vivek";
 static const char *MQTT_PASSWORD = "12345678";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
+
+extern const uint8_t gts_root_r4_pem_start[] asm("_binary_gts_root_r4_pem_start");
 
 #define COMPANY_ID "amber03AABCA3456E1Z9"
 
@@ -41,9 +42,8 @@ esp_err_t xMqttManagerInit(void)
     const esp_mqtt_client_config_t mqtt_cfg = {
         .broker = {
             .address = {
-                .uri = MQTT_URI,
-                .port = 8883},
-            .verification = {.crt_bundle_attach = esp_crt_bundle_attach}},
+                .uri = MQTT_URI,},
+            .verification = {.certificate = (const char *)gts_root_r4_pem_start}},
         .credentials = {.username = MQTT_USERNAME, .authentication = {.password = MQTT_PASSWORD}, .client_id = ctx->deviceId},
         .session = {.keepalive = 10, .last_will = {.topic = statusTopic, .msg = (const char *)lwtBuffer, .msg_len = lwtLen, .qos = 1, .retain = 1}}};
     mqtt_client = esp_mqtt_client_init(&mqtt_cfg);

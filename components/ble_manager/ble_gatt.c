@@ -162,7 +162,6 @@ static size_t g_signature_len = 0;
 
 static const char *TAG = "BLE_GATT";
 
-
 // To notify app about credentials ok
 void vBleNotifyWifiStatus(uint16_t conn_handle, wifi_ble_status_t status)
 {
@@ -323,7 +322,7 @@ static int wifi_cred_ssid_cb(uint16_t conn_handle, uint16_t attr_handle, struct 
         if (err == ESP_OK)
         {
             ctx->wifi.credentials.ssid[copy_len] = '\0';
-            ctx->wifi.credentials.ssid_valid = true;
+            ctx->wifi.credentials.ssid_received = true;
 
             vGattProvisioningState();
         }
@@ -361,7 +360,7 @@ static int wifi_cred_pass_cb(uint16_t conn_handle, uint16_t attr_handle, struct 
         if (err == ESP_OK)
         {
             ctx->wifi.credentials.pass[copy_len] = '\0';
-            ctx->wifi.credentials.pass_valid = true;
+            ctx->wifi.credentials.pass_received = true;
 
             vGattProvisioningState();
         }
@@ -517,7 +516,6 @@ static int claim_token_cb(uint16_t conn_handle, uint16_t attr_handle, struct ble
 static int claim_signature_cb(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
 
-
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR)
     {
         return BLE_ATT_ERR_UNLIKELY;
@@ -569,14 +567,14 @@ static void vGattProvisioningState(void)
 {
     app_context_t *ctx = xAppContextGet();
 
-    if (ctx->wifi.credentials.ssid_valid &&
-        ctx->wifi.credentials.pass_valid &&
+    if (ctx->wifi.credentials.ssid_received &&
+        ctx->wifi.credentials.pass_received &&
         ctx->security.claim_verified &&
-        !ctx->wifi.credentials.pending_save)
+        !ctx->wifi.credentials.cred_save_pending)
     {
 
         app_context_t *ctx = xAppContextGet();
-        ctx->wifi.credentials.pending_save = true;
+        ctx->wifi.credentials.cred_save_pending = true;
         xTimerReset(provision_timer, 0);
     }
 }

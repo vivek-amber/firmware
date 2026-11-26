@@ -8,4 +8,5 @@ idf_component_register(SRCS
                         common
                         queue_manager
                         security_manager
+                        device_manager
                     )

@@ -14,6 +14,7 @@
 #include "storage.h"
 #include "led_manager.h"
 #include "security_manager.h"
+#include "ota_manager.h"
 
 /* Private variables*/
 static const char *TAG = "DEVICE_MANAGER";
@@ -30,6 +31,7 @@ void vDeviceManagerInit(void)
     xSecurityManagerInit();
     xAppContextInit();
     xBleManagerInit();
+    xOtaManagerInit();
     xWifiManagerInit();
     xUartManagerInit();
     vDeviceInit();
@@ -124,6 +126,9 @@ static void vDeviceTask(void *arg)
                         ESP_LOGE(TAG, "MQTT init failed");
                     }
                 }
+
+                ota_manager_on_wifi_connected();
+                
                 break;
 
             case APP_EVENT_WIFI_CONNECTION_FAILED:

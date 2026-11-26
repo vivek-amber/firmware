@@ -3,6 +3,7 @@
 #include "queue_manager.h"
 #include "app_context.h"
 #include "security_manager.h"
+#include "device_manager.h"
 
 /* Private function declarations */
 static void vGattProvisioningState(void);
@@ -24,7 +25,7 @@ static int model_id_cb(uint16_t conn_handle, uint16_t attr_handle, struct ble_ga
 
 /* Private variables*/
 
-static char modelId[] = "amber_ac_v1";
+//static char modelId[] = "amber_ac_v1";
 static TimerHandle_t provision_timer;
 const ble_uuid128_t wifi_svc_uuid =
     BLE_UUID128_INIT(

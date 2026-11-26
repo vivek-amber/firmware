@@ -1,0 +1,45 @@
+menu APPLICATION REQUIRED DEFINES
+
+    config APP_BLE_NAME
+        string "BLE_NAME"
+        default "BLE Name"
+        help
+            Set the BLE name for the application.
+
+    config APP_MODEL_ID
+        string "Model_ID"
+        default "Amber AC"
+        help
+            Set the MODEL ID for the application.
+
+    config APP_COMPANY_ID    
+        string "COMPANY_ID"
+        default "Amber_123"
+        help
+            Set the COMPANY ID for the application.        
+
+    config APP_MQTT_URI   
+        string "MQTT_URI"
+        default "MQTT URI"
+        help
+            Set the MQTT URI for the application.        
+     
+    config APP_MQTT_USERNAME  
+        string "MQTT_USERNAME"
+        default "MQTT USERNAME"
+        help
+            Set the MQTT USERNAME for the application.  
+            
+    config APP_MQTT_PASSWORD   
+        string "MQTT_PASSWORD"
+        default "MQTT PASSWORD"
+        help
+            Set the MQTT PASSWORD for the application.  
+            
+    config SERVER_PUBLIC_KEY
+        string "SERVER PUBLIC KEY"
+        default "00112233445566778899AABBCCDDEEFF"
+        help
+            65-byte key as a plain hex string, no spaces, no 0x.       
+
+endmenu

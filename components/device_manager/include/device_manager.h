@@ -5,5 +5,6 @@
 /* Methods */
 void vDeviceManagerInit( void );
 
+#define modelId "amber_ac_v1"
 
 #endif

@@ -14,7 +14,7 @@
 
 static const char *TAG = "SECURITY";
 static psa_key_id_t sPrivateKeyId = 0;
-static psa_key_id_t sServerPubluicKeyId = 0;
+static psa_key_id_t sServerPublicKeyId = 0;
 
 static void vGenerateAndPrintKeyPair(void);
 
@@ -75,7 +75,7 @@ esp_err_t xSecurityManagerInit(void)
     psa_set_key_type(&attributes, PSA_KEY_TYPE_ECC_PUBLIC_KEY(PSA_ECC_FAMILY_SECP_R1));
     psa_set_key_bits(&attributes, 256);
 
-    status = psa_import_key(&attributes, SERVER_PUBLIC_KEY, sizeof(SERVER_PUBLIC_KEY), &sServerPubluicKeyId);
+    status = psa_import_key(&attributes, SERVER_PUBLIC_KEY, sizeof(SERVER_PUBLIC_KEY), &sServerPublicKeyId);
 
     /* Cleanup for mem used for key props */
     psa_reset_key_attributes(&attributes);
@@ -145,7 +145,7 @@ esp_err_t xSecurityManagerVerifyClaim(const uint8_t *claim, size_t claimLen, uin
         return ESP_FAIL;
     }
 
-    status = psa_verify_message(sServerPubluicKeyId, PSA_ALG_ECDSA(PSA_ALG_SHA_256), claim, claimLen, sigBin, sigBinLen);
+    status = psa_verify_message(sServerPublicKeyId, PSA_ALG_ECDSA(PSA_ALG_SHA_256), claim, claimLen, sigBin, sigBinLen);
 
     if (status != PSA_SUCCESS)
     {

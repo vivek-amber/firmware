@@ -20,7 +20,7 @@ typedef enum
     APP_EVENT_NONE = 0,
 
     APP_EVENT_AC_TIMEOUT_CHECK,
-    
+
     APP_EVENT_WIFI_PROVISIONING_START,
     APP_EVENT_WIFI_PROVISIONING_COMPLETE,
     APP_EVENT_WIFI_CONNECTION_FAILED,
@@ -68,11 +68,11 @@ typedef struct
     bool connected;
 } mqtt_ctx_t;
 
-typedef struct{
+typedef struct
+{
     bool nonce_received;
     bool claim_verified;
 } security_ctxt_t;
-
 
 /* Wifi Types */
 typedef enum
@@ -86,14 +86,15 @@ typedef enum
     WIFI_STATE_ERROR
 } wifi_state_t;
 
-typedef struct{
+typedef struct
+{
     char ssid[33];
     char pass[65];
 
-    bool ssid_valid;
-    bool pass_valid;
+    bool ssid_received;
+    bool pass_received;
 
-    bool pending_save;
+    bool cred_save_pending;
 } wifi_credentials_t;
 
 typedef struct
@@ -117,13 +118,12 @@ typedef struct
     uint16_t len;
 } mqtt_msg_t;
 
-
 #ifndef MIN
-#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #ifndef MAX
-#define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
 #endif

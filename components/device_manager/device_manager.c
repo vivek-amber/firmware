@@ -83,10 +83,10 @@ static void vDeviceTask(void *arg)
 
             case APP_EVENT_WIFI_PROVISIONING_COMPLETE:
 
-                // 1. Stop MQTT client if it was already initialized 
+                // 1. Stop MQTT client if it was already initialized
                 if (ctx->mqtt.initialized)
                 {
-                    xMqttManagerStop(); // MQTT stop function 
+                    xMqttManagerStop(); // MQTT stop function
                     ctx->mqtt.initialized = false;
                 }
 
@@ -103,7 +103,7 @@ static void vDeviceTask(void *arg)
                 // Notify's app
                 vBleNotifyWifiStatus(ctx->ble.conn_handle, WIFI_STATUS_CONNECTED);
 
-                if (ctx->wifi.credentials.pending_save)
+                if (ctx->wifi.credentials.cred_save_pending)
                 {
                     esp_err_t err = xStorageSaveWifiCredentials();
 
@@ -129,10 +129,10 @@ static void vDeviceTask(void *arg)
             case APP_EVENT_WIFI_CONNECTION_FAILED:
 
                 // Notify's app
-                if (ctx->wifi.credentials.pending_save)
+                if (ctx->wifi.credentials.cred_save_pending)
                 {
                     vBleNotifyWifiStatus(ctx->ble.conn_handle, WIFI_STATUS_FAILED);
-                    ctx->wifi.credentials.pending_save = false;
+                    ctx->wifi.credentials.cred_save_pending = false;
                 }
                 break;
 

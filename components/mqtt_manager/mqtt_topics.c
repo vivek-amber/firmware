@@ -9,13 +9,18 @@
 /* Private variables */
 static const char *TAG = "MQTT_TPOICS";
 static TimerHandle_t heartBeatTimer;
+static TaskHandle_t heartBeatTaskHandle = NULL;
 static esp_mqtt_client_handle_t mqttClient;
+static void vMqttHeartBeatTimerCb(TimerHandle_t timer);
+static void vMqttHeartBeatTask(void *pvParameters);
 
 #define COMPANY_ID "amber03AABCA3456E1Z9"
 #define HEART_BEAT_INTERVAL 5000 // 5 sec
 
 /* Private Function declaration */
-static void vMqttPublishHeartBeat(TimerHandle_t timer);
+static void vMqttHeartBeatTimerCb(TimerHandle_t timer);
+static void vMqttHeartBeatTask(void *pvParameters);
+static void vMqttPublishHeartBeat(void);
 
 /* Susbcribes to topic and starts heart beat timer */
 void vMqttSubscribeTopics(esp_mqtt_event_handle_t event)
@@ -36,17 +41,39 @@ void vMqttSubscribeTopics(esp_mqtt_event_handle_t event)
 
     /* Timer for periodic heart beats */
     mqttClient = event->client;
-    heartBeatTimer = xTimerCreate(
-        "heart_beat_timer",
-        pdMS_TO_TICKS(HEART_BEAT_INTERVAL),
-        pdTRUE,
-        NULL,
-        vMqttPublishHeartBeat);
+   /* Create dedicated heartbeat task once (keeps Tmr Svc stack tiny) */
+    if (heartBeatTaskHandle == NULL)
+    {
+        BaseType_t taskOk = xTaskCreate(
+            vMqttHeartBeatTask,
+            "mqtt_hb_task",
+            4096,
+            NULL,
+            5,
+            &heartBeatTaskHandle);
 
+        if (taskOk != pdPASS)
+        {
+            ESP_LOGE(TAG, "Heartbeat task create failed");
+            return;
+        }
+    }
+
+    /* Create timer once; reset/start if reconnecting */
     if (heartBeatTimer == NULL)
     {
-        ESP_LOGE(TAG, "Timer create failed");
-        return;
+        heartBeatTimer = xTimerCreate(
+            "heart_beat_timer",
+            pdMS_TO_TICKS(HEART_BEAT_INTERVAL),
+            pdTRUE,
+            NULL,
+            vMqttHeartBeatTimerCb);
+
+        if (heartBeatTimer == NULL)
+        {
+            ESP_LOGE(TAG, "Timer create failed");
+            return;
+        }
     }
 
     if (xTimerStart(heartBeatTimer, 0) != pdPASS)
@@ -112,7 +139,8 @@ void vMqttStopHeartbeatTimer(void)
     ESP_LOGI(TAG, "Heartbeat timer stopped and deleted");
 }
 
-static void vMqttPublishHeartBeat(TimerHandle_t timer)
+
+static void vMqttPublishHeartBeat()
 {
     app_context_t *ctx = xAppContextGet();
 
@@ -148,5 +176,25 @@ static void vMqttPublishHeartBeat(TimerHandle_t timer)
     if (messageId < 0)
     {
         ESP_LOGE(TAG, "Heartbeat error msgId=%d", messageId);
+    }
+}
+
+/* Runs inside Tmr Svc: only wakes up mqtt_hb_task using near-zero stack */
+static void vMqttHeartBeatTimerCb(TimerHandle_t timer)
+{
+    (void)timer;
+    if (heartBeatTaskHandle != NULL)
+    {
+        xTaskNotifyGive(heartBeatTaskHandle);
+    }
+}
+
+static void vMqttHeartBeatTask(void *pvParameters)
+{
+    (void)pvParameters;
+    for (;;)
+    {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        vMqttPublishHeartBeat();
     }
 }
